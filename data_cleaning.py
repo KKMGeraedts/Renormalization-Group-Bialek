@@ -17,9 +17,9 @@ def read_input():
 
     # Check file type, read file and return np array
     if input_file[-3:] == "npy":
-        return np.load(f"./input/{input_file}")
+        return np.load(f"./{input_file}")
     elif input_file[-3:] == "dat":
-        return np.loadtxt(f"./input/{input_file}")
+        return np.loadtxt(f"./{input_file}")
     else:
         print("Make sure input file has extensions .npy or .dat")
         return None
