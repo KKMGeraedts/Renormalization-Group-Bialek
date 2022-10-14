@@ -30,7 +30,7 @@ def real_space_rg_iteration(X, correlation, test=False):
 
         # Remove the corresponding row and column
         correlation = np.delete(correlation, [max_i, max_j], axis=0)
-        correlation = np.delete(correlation, [max_j, max_j], axis=1)
+        correlation = np.delete(correlation, [max_i, max_j], axis=1)
 
         # Save found pairing
         max_i_original = list_of_original_indices[0][max_i]
@@ -40,7 +40,10 @@ def real_space_rg_iteration(X, correlation, test=False):
 
         # np.delete reshapes the array, undo this
         if len(list_of_original_indices) != 0:
-            list_of_original_indices = list_of_original_indices.reshape(len(correlation), -1)
+            list_of_original_indices = list_of_original_indices.reshape(-1, len(correlation))
+        elif len(list_of_original_indices) == 1:
+            pairings.append(list_of_original_indices[0])
+
 
         # Merge pair in dataset also
         X_coarse[i] = (X[max_i_original] + X[max_j_original]) / 2
@@ -52,19 +55,67 @@ def real_space_rg_iteration(X, correlation, test=False):
 
     return X_coarse, pairings
 
+def compute_couplings(X):
+    """
+    Finds the best fit for the coupling of the full model with X as dataset.
+
+    Parameters:
+        X - dataset to fit with
+
+    Return:
+        couplings - list of couplings
+    """
+    #print(X.shape)
+    couplings = []
+    return couplings
+
+def add_to_clusters(clusters, pairings):
+    """
+    Add pairings found at a RG iteration to clusters that have already been formed by
+    the previous iterations.
+
+    Parameters:
+        clusters - 2darray of non-coarse grained variables per cluster
+        pairing - pairings of variables found at a RG iteration
+
+    Return:
+        clusters - 2darray containing new clusters. 
+    """
+    # First RG iteration
+    if len(clusters) == 0:
+        return pairings
+
+    # Loop over pairings found and create new clusters
+    new_clusters = []
+    for i, pair in enumerate(pairings):
+        if len(pair) == 1: # This variable was not paired
+            new_cluster = pair
+        elif len(pair) == 2:
+            new_cluster = np.array([clusters[pair[0]], clusters[pair[1]]])
+        else:
+            print("Found a pair with length > 2. Something went wrong.")
+       
+        # Reshape clusters so it stays a 2d array
+        new_clusters.append(new_cluster.reshape(-1))
+    return new_clusters
+
 def real_space_rg(X, steps, test=False):
     """
     """
     X_list = []
-    pairings_list = []
+    clusters = []
     X_coarse = X
+    couplings = []
 
     # Perform RG iterations
     for i in range(steps):
-
         # Cannot coarse any further
-        if len(X_coarse == 1):
-            continue
+        if len(X_coarse) == 1:
+            print("Finished coarse-graining!")
+            return X_list, clusters
+
+        # Compute couplings
+        couplings.append(compute_couplings(X_coarse))
 
         # Compute correlation
         correlation = np.corrcoef(X_coarse)
@@ -74,9 +125,11 @@ def real_space_rg(X, steps, test=False):
 
         # RG iteration
         X_coarse, pairings = real_space_rg_iteration(X_coarse, correlation, test=test)
-        pairings_list.append(pairings)
 
-    return X_list, pairings_list
+        # Add pairing to clusters
+        clusters = add_to_clusters(clusters, pairings)
+
+    return X_list, clusters 
 
 if __name__ == "__main__":
     # Read input 
@@ -84,4 +137,4 @@ if __name__ == "__main__":
     X = check_dataset_shape(X.T)
 
     steps = 5
-    X_coarse, pairings_list = real_space_rg(X, steps, test=False)
+    X_coarse, clusters = real_space_rg(X, steps, test=False)
