@@ -19,7 +19,8 @@ def read_input():
     if input_file[-3:] == "npy":
         return np.load(f"./{input_file}")
     elif input_file[-3:] == "dat":
-        return np.loadtxt(f"./{input_file}")
+        # Assuming .dat files contain at each row a binary string, eg. '00..01100'
+        return np.genfromtxt(f"./{input_file}", delimiter=1, dtype=np.int8)  
     else:
         print("Make sure input file has extensions .npy or .dat")
         return None
