@@ -1,0 +1,23 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[[source]]
+url = "https://download.pytorch.org/whl/cpu"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+numpy = "*"
+matplotlib = "*"
+pandas = "*"
+scipy = "*"
+torch = "*"
+torchvision = "*"
+torchaudio = "*"
+
+[dev-packages]
+
+[requires]
+python_version = "3.10"

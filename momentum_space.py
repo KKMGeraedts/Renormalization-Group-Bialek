@@ -156,7 +156,7 @@ if __name__ == "__main__":
 
     # Read input 
     X = read_input()
-    X = check_dataset_shape(X.T)
+    X = check_dataset(X.T)
     print(f"Shape of input data = {X.shape}")
 
     # Perform RG in momentum space 
