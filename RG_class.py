@@ -4,6 +4,7 @@ import pairwise_clustering_bialek
 import random_pairwise_clustering
 import matplotlib.pyplot as plt
 import time
+import pandas as pd
 
 class RGObject():
 
@@ -116,8 +117,8 @@ class RGObject():
             verbose (optional) - if set to True prints the timing at each RG step
 
         Return:
-           probabilities_clusters - contains the probabilities in the following way, ndarray of shape (n_unique_activity_values, n_variables, n_rg_iterations) 
-           activity_clusters - contains all the unique activity values, ndarray of shape (n_unique_actitiviy_values, n_rg_iterations)
+        probabilities_clusters - contains the probabilities in the following way, ndarray of shape (n_unique_activity_values, n_variables, n_rg_iterations) 
+        activity_clusters - contains all the unique activity values, ndarray of shape (n_unique_actitiviy_values, n_rg_iterations)
         """
         # Check that some coarse-grianing has happened
         if self.Xs == []:
@@ -126,40 +127,47 @@ class RGObject():
 
         # Things to keep track off
         t_start_all = time.time()
-        probabilities_clusters = []
-        activity_clusters = []
+        p_averages = []
+        p_stds = []
+        unique_activity_values = []
+        #df_probability_distributions = pd.DataFrame()
 
         # Loop over the datasets of the coarse-grained variables
         for i, X in enumerate(self.Xs):
             probabilities = []
-            activity = []
             t_start = time.time()
 
             # Compute normalized activity in each cluster
             n = (2 ** (i) + 1)
             xk = np.linspace(-1, 1, n)
             pk = np.zeros(len(xk))
-            d = dict(zip(xk, pk))
-
+            average_prob = dict(zip(xk, pk))
+            std_prob = dict(zip(xk, pk))
+            
+            df_probs = pd.DataFrame()
+        
+            # Loop over variables in dataset
             for var in X:
+                
+                # Find distribution of variable
                 values, counts = np.unique(var, return_counts=True)
                 counts = counts / sum(counts)
-
-                # Update the probabilities found in the dataset
-                for j, val in enumerate(values):
-                    pass
-
-                probabilities.append(list(counts))
-                activity.append(list(values))
                 
-            # Store the probabilities
-            probabilities_clusters.append(probabilities)
-            activity_clusters.append(activity)
+                df_probs = df_probs.append(dict(zip(values, counts)), ignore_index=True)
 
+            # Compute column averages and stds
+            df_probs.fillna(0.00)
+            p_averages.append(df_probs.mean(axis=0).to_numpy())
+            p_stds.append(df_probs.std(axis=0).to_numpy())
+            
+            # Add unique values
+            unique_activity = df_probs.columns.to_numpy()
+            unique_activity_values.append(unique_activity)
+                
             # Print process statistics
             if verbose:
                 print(f"Finished {i+1}/{len(self.Xs)}")
                 print(f"Running time = {round(time.time() - t_start, 3)} seconds.")
-                    
+
         print(f"Total running time = {round(time.time() - t_start_all, 3)} seconds.")
-        return probabilities_clusters, activity_clusters
+        return p_averages, p_stds, unique_activity_values

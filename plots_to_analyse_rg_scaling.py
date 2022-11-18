@@ -3,27 +3,25 @@ import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 import math
 
-def plot_normalized_activity(X_list):
+def plot_normalized_activity(p_averages, p_stds, unique_activity_values):
     """
+    Plots the distribution of the normalized activity. Given the average probabilities, standard deviations and the unique values at each
+    step of the coarse-graining. This data can be obtained from the RG_class.
+
+    Parameters:
+        p_averages - a list of size = n_rg_iterations with each list containing an numpy array of the average activity across all clusters
+        p_stds - a list of size = n_rg_iterations with each list containing an numpy array of the standard deviation of the activity across all clusters
+        unique_activity_values - a list of size = n_rg_iterations with each list containing an numpy array of the unique activity values in the clusters
     """
-    n_vars = X_list[0].shape[0] # Variables in dataset before coarse-graining
-    bins = 50
-
-    figs, axs = plt.subplots(1)
-    markers = list(Line2D.markers.keys())[3:len(X_list) + 3]
-
-    for i, X in enumerate(X_list):
-        # Create histogram
-        hist_values, hist_edges = np.histogram(X, bins=bins, density=True)
-        hist_edges = [(hist_edges[i] + hist_edges[i+1]) / 2 for i in range(len(hist_edges) - 1)]
-
-        # Plot histogram
-        axs.plot(hist_edges, hist_values, marker=markers[i], markersize=5, label=f"K = {n_vars // X.shape[0]}")
+    for i, _ in enumerate(p_averages):
+        cluster_size = np.log2(len(p_averages[i]) - 1) + 1
+        plt.errorbar(unique_activity_values[i], p_averages[i], 2*p_stds[i], fmt="o--", markersize=3, label=f"K = {cluster_size}")
 
     plt.ylabel("probability")
     plt.xlabel("normalized activity")
     plt.title("Probability distribution of the normalized activity")
-    plt.legend()
+    plt.grid(True)
+    plt.legend(loc="upper right")
     plt.show()
 
 def show_clusters_by_imshow(clusters, verbose=False):
@@ -69,7 +67,7 @@ def plot_eigenvalue_scaling(X_coarse):
         # Plot spectrum
         sort_idx = np.argsort(eigvalues)
         eigvalues = eigvalues[sort_idx][::-1]
-        rank = np.arange(0, len(eigvalues)) / len(eigvalues)
+        rank = np.arange(1, len(eigvalues)+1) / len(eigvalues)
         plt.plot(rank, eigvalues, "o--", label=f"K = {n_vars // X.shape[0]}")
     
     plt.ylabel("eigenvalues")
@@ -102,46 +100,6 @@ def plot_n_largest_eigenvectors(X_coarse, n):
         fig.colorbar(im)
 
     plt.legend()
-    plt.show()
-
-def plot_probability_distributions(probabilities_clusters, activity_clusters):
-
-    probs = np.array(probabilities_clusters)
-    activs = [activ[0] for activ in activity_clusters]
-
-    # free energy
-    free_energy = []
-    free_energy_err = []
-    cluster_sizes = []
-    search_value = activs[1][1]
-
-    fig, ax = plt.subplots(1)
-
-    for i, prob in enumerate(probs):
-        mean_probs = np.mean(prob, axis=0)
-        std_probs = np.std(prob, axis=0)
-        
-        cluster_sizes.append(len(activity_clusters[0]) // len(activity_clusters[i]))
-        plt.errorbar(activs[i], mean_probs, 2*std_probs, fmt="o--", markersize=3, label=f"K = {cluster_sizes[i]}")
-
-        if i != 0:
-            p0 = mean_probs[np.where(activs[i] == search_value)]
-            p0_std = std_probs[np.where(activs[i] == search_value)]
-            free_energy.append(np.log(p0)[0])
-            free_energy_err.append(-np.log(p0_std)[0])
-
-    plt.ylabel("probability")
-    plt.xlabel("normalized activity")
-    plt.grid(True)
-    plt.legend()
-    plt.show()
-
-    #plt.errorbar(cluster_sizes[1:], free_energy, free_energy_err, fmt="go--", markersize=5)
-    plt.plot(cluster_sizes[1:], free_energy, "go--", markersize=5)
-    plt.xlabel("cluster size")
-    plt.ylabel(r"ln(P$_{silence}$)")
-    #plt.yscale("log")
-    plt.grid(True)
     plt.show()
 
 def plot_eigenvalue_spectra_within_clusters(Xs, clusters):
@@ -180,20 +138,44 @@ def plot_eigenvalue_spectra_within_clusters(Xs, clusters):
         # Plot
         plt.errorbar(rank, mean, 3*std, fmt="o--", label=f"K = {cluster_size}")
         
-    plt.xlabel("rank / K")
+    plt.xlabel("rank/K")
     plt.ylabel("eigenvalues")
     plt.legend()
     plt.show()
 
-def plot_free_energy_scaling(X_list):
+def plot_free_energy_scaling(p_averages, p_stds, unique_activity_values):
     """
     When a RG transformation is exact the free energy does not change. This function compute the free energy at each
     coarse-grained step and log plots the values. We hope to see some scaling with a power law close to 1.
 
+    We can compute the free energy by F = -np.log(p0) with p0 the probability that a cluster is silent.
+
     Parameters:
         X_list - nd numpy array containing the variables at different steps of the coarse-graining
     """
-    
-    # Loop over the datasets of the coarse-grained variables
-    for X in X_list:
-        pass
+    p0_avg = []
+    p0_std = []
+    cluster_sizes = []
+    for i, unique_vals in enumerate(unique_activity_values):
+        # Find idx at which cluster is silent
+        idx = np.argwhere(unique_vals == 0.0)
+        
+        # Check it exists
+        if len(idx) != 0:
+            idx = idx[0]
+            
+            # Add to list
+            p0_avg.append(list(p_averages[i][idx])[0])
+            p0_std.append(list(p_stds[i][idx])[0])
+
+            # Compute cluster size
+            cluster_size = np.log2(len(p_averages[i]) - 1) + 1
+            cluster_sizes.append(cluster_size)
+
+    # Plot the probability of the cluster being silent
+    plt.errorbar(cluster_sizes, p0_avg, 3*np.array(p0_std), fmt="g^--")
+    plt.xlabel("cluster size")
+    plt.ylabel(r"ln P$_{Silence}$")
+    plt.yscale("log")
+    plt.grid(True)
+    plt.show()
