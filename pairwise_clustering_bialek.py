@@ -13,7 +13,6 @@ def real_space_rg(X, steps, test=False):
     for i in range(steps):
         # Cannot coarse any further
         if len(X_coarse) == 1:
-            print("Finished coarse-graining!")
             return np.array(X_list), np.array(clusters_list), np.array(coupling_parameters)
 
         # Compute couplings
@@ -32,7 +31,6 @@ def real_space_rg(X, steps, test=False):
         clusters = add_to_clusters(clusters, pairings)
         clusters_list.append(np.array(clusters))
 
-    print("Finished coarse-graining!")
     return np.array(X_list), np.array(clusters_list), np.array(coupling_parameters)
 
 def real_space_rg_iteration(X, correlation, test=False):
@@ -66,15 +64,13 @@ def real_space_rg_iteration(X, correlation, test=False):
         print(f"The correlation matrix is given by:\n{correlation}")
         print(f"Original dataset X:\n{X}")
 
-
     for i in range(len(correlation) // 2):
         # Find highest correlated pair from correlation matrix
         max_idx = correlation.argmax()
         max_i, max_j = max_idx // len(correlation), max_idx % len(correlation)
 
         if max_i == max_j:
-            print('found diagonal element')
-            print(correlation)
+            print('Found diagonal element!')
 
         # Remove the corresponding row and column from correlation matrix
         correlation = np.delete(correlation, [max_i, max_j], axis=0)
@@ -87,7 +83,7 @@ def real_space_rg_iteration(X, correlation, test=False):
         pairings.append([max_i_original, max_j_original])
         list_of_original_indices = np.delete(list_of_original_indices, [max_i, max_j, max_i + len(list_of_original_indices[0]), max_j + len(list_of_original_indices[0])])
 
-        # np.delete reshapes the array, undo this
+        # np.delete reshapes the array, we dont want this so undo it
         if len(list_of_original_indices) != 0:
             list_of_original_indices = list_of_original_indices.reshape(-1, len(correlation))
         elif len(list_of_original_indices) == 1:
@@ -100,6 +96,9 @@ def real_space_rg_iteration(X, correlation, test=False):
         print("\nResults\n#######################################")
         print(f"Pairings found = {pairings}")
         print(f"Coarse grained dataset:\n{X_coarse}\n")
+
+    if len(list_of_original_indices) == 1:
+        pairings.append([list_of_original_indices[0]])
 
     return X_coarse, pairings
 

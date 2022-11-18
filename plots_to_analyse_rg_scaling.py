@@ -103,3 +103,97 @@ def plot_n_largest_eigenvectors(X_coarse, n):
 
     plt.legend()
     plt.show()
+
+def plot_probability_distributions(probabilities_clusters, activity_clusters):
+
+    probs = np.array(probabilities_clusters)
+    activs = [activ[0] for activ in activity_clusters]
+
+    # free energy
+    free_energy = []
+    free_energy_err = []
+    cluster_sizes = []
+    search_value = activs[1][1]
+
+    fig, ax = plt.subplots(1)
+
+    for i, prob in enumerate(probs):
+        mean_probs = np.mean(prob, axis=0)
+        std_probs = np.std(prob, axis=0)
+        
+        cluster_sizes.append(len(activity_clusters[0]) // len(activity_clusters[i]))
+        plt.errorbar(activs[i], mean_probs, 2*std_probs, fmt="o--", markersize=3, label=f"K = {cluster_sizes[i]}")
+
+        if i != 0:
+            p0 = mean_probs[np.where(activs[i] == search_value)]
+            p0_std = std_probs[np.where(activs[i] == search_value)]
+            free_energy.append(np.log(p0)[0])
+            free_energy_err.append(-np.log(p0_std)[0])
+
+    plt.ylabel("probability")
+    plt.xlabel("normalized activity")
+    plt.grid(True)
+    plt.legend()
+    plt.show()
+
+    #plt.errorbar(cluster_sizes[1:], free_energy, free_energy_err, fmt="go--", markersize=5)
+    plt.plot(cluster_sizes[1:], free_energy, "go--", markersize=5)
+    plt.xlabel("cluster size")
+    plt.ylabel(r"ln(P$_{silence}$)")
+    #plt.yscale("log")
+    plt.grid(True)
+    plt.show()
+
+def plot_eigenvalue_spectra_within_clusters(Xs, clusters):
+    """
+    This function plots the eigenvalue spectra within the clusters. At each coarse-grained level the mean and variance of the spectra
+    across the different clusters are computed and plotted.
+
+    Parameters:
+        Xs - list contianing the dataset at each coarse-grained level
+        clusters - list containing the clusters that where formed at the different coarse-grianing iterations
+    """
+    original_dataset = Xs[0]
+
+    # Loop over coarse-graining iterations
+    for i, cluster in enumerate(clusters):
+        
+        # Compute cluster size
+        cluster_size = len(clusters[0]) // len(cluster) * 2
+        
+        # Not interested in the spectra of these small clusters
+        if cluster_size <= 2:
+            continue
+            
+        # Compute the spectrum for each cluster, average and plot with std
+        eigvalues_l = []
+        for c in cluster:
+            corr = np.corrcoef(original_dataset[c])
+            eigvalues, _ = np.linalg.eig(corr)
+            eigvalues_l.append(np.sort(eigvalues)[::-1])
+            
+        # Compute statistics
+        rank = np.arange(1, len(eigvalues) + 1) / len(eigvalues)
+        mean = np.mean(eigvalues_l, axis=0)
+        std = np.std(eigvalues_l, axis=0)
+        
+        # Plot
+        plt.errorbar(rank, mean, 3*std, fmt="o--", label=f"K = {cluster_size}")
+        
+    plt.xlabel("rank / K")
+    plt.ylabel("eigenvalues")
+    plt.legend()
+    plt.show()
+
+def plot_free_energy_scaling(X_list):
+    """
+    When a RG transformation is exact the free energy does not change. This function compute the free energy at each
+    coarse-grained step and log plots the values. We hope to see some scaling with a power law close to 1.
+
+    Parameters:
+        X_list - nd numpy array containing the variables at different steps of the coarse-graining
+    """
+    
+    # Loop over the datasets of the coarse-grained variables
+    for X in X_list:
+        pass
