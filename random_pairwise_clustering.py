@@ -14,6 +14,8 @@ def real_space_rg(X, steps, test=False):
         # Cannot coarse any further
         if len(X_coarse) == 1:
             return np.array(X_list), np.array(clusters_list), np.array(coupling_parameters)
+        elif len(X_coarse) == 2 and len(X_coarse[0]) != len(X_coarse[1]):
+            return np.array(X_list), np.array(clusters_list), np.array(coupling_parameters)
 
         # Compute couplings
         # coupling_parameters.append(compute_couplings(X_coarse))
@@ -54,16 +56,15 @@ def real_space_rg_iteration(X):
     # Do a pairwise summation
     if (len(X_rearanged) % 2) == 0:
         X_coarse = (X_rearanged[::2] + X_rearanged[1::2]) / 2
-        pairings = [[X_pairings_idxs[i], X_pairings_idxs[i+1]] for i in range(len(X_pairings_idxs) // 2)]
+        pairings = [[X_pairings_idxs[2*i], X_pairings_idxs[(2*i)+1]] for i in range(len(X_pairings_idxs) // 2)]
     else:
         X_coarse = (X_rearanged[1::2] + X_rearanged[2::2]) / 2
-        pairings = [[X_pairings_idxs[i+1], X_pairings_idxs[i+2]] for i in range(len(X_pairings_idxs) // 2)]
+        pairings = [[X_pairings_idxs[(2*i)+1], X_pairings_idxs[(2*i)+2]] for i in range(len(X_pairings_idxs) // 2)]
 
-        # Add one spin seperately
-        print("here")
-        X_coarse = list(X_coarse)
-        X_coarse.append(X_rearanged[0])
-        pairings.append([X_pairings_idxs[0]])
+        # Ignore the unpaired spin
+        # X_coarse = list(X_coarse)
+        # X_coarse.append(X_rearanged[0])
+        # pairings.append([X_pairings_idxs[0]]
 
     return np.array(X_coarse), pairings
 
@@ -87,7 +88,8 @@ def add_to_clusters(clusters, pairings):
     new_clusters = []
     for _, pair in enumerate(pairings):
         if len(pair) == 1: # This variable was not paired
-            new_clusters.append(pair)
+            #new_clusters.append(clusters[pair[0]])
+            pass
         elif len(pair) == 2:
             new_cluster = np.array([clusters[pair[0]], clusters[pair[1]]])
             
@@ -97,3 +99,4 @@ def add_to_clusters(clusters, pairings):
             print("Found a pair with length > 2. Something went wrong.")
        
     return new_clusters
+    

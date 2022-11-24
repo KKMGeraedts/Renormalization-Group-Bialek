@@ -143,27 +143,31 @@ class RGObject():
             pk = np.zeros(len(xk))
             average_prob = dict(zip(xk, pk))
             std_prob = dict(zip(xk, pk))
-            
+
             df_probs = pd.DataFrame()
-        
+
             # Loop over variables in dataset
             for var in X:
-                
+
                 # Find distribution of variable
                 values, counts = np.unique(var, return_counts=True)
                 counts = counts / sum(counts)
                 
+                # Add to dataframe
                 df_probs = df_probs.append(dict(zip(values, counts)), ignore_index=True)
-
+                
+            # Fill nan values and sort
+            df_probs = df_probs.fillna(0.00)
+            df_probs = df_probs.reindex(sorted(df_probs.columns), axis=1)
+                    
             # Compute column averages and stds
-            df_probs.fillna(0.00)
             p_averages.append(df_probs.mean(axis=0).to_numpy())
             p_stds.append(df_probs.std(axis=0).to_numpy())
-            
+
             # Add unique values
             unique_activity = df_probs.columns.to_numpy()
             unique_activity_values.append(unique_activity)
-                
+
             # Print process statistics
             if verbose:
                 print(f"Finished {i+1}/{len(self.Xs)}")
