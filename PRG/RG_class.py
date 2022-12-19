@@ -1,7 +1,7 @@
 import numpy as np
-from data_cleaning import *
-import pairwise_clustering_bialek
-import random_pairwise_clustering
+from .data_cleaning import *
+from . import pairwise_clustering_bialek
+from . import random_pairwise_clustering
 import matplotlib.pyplot as plt
 import time
 import pandas as pd

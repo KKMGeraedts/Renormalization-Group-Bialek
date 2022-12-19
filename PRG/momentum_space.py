@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt 
 import numpy as np
 import math
-from data_cleaning import *
+from .data_cleaning import *
 
 def compute_euclidean_distance(X):
     """
