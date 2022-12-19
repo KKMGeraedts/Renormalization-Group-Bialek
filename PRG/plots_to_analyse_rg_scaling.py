@@ -5,7 +5,7 @@ import math
 from scipy.stats import binom
 import matplotlib.colors as mcolors
 
-def plot_normalized_activity(p_averages, p_stds, unique_activity_values, clusters, title=""):
+def plot_normalized_activity(p_averages, p_stds, unique_activity_values, clusters, rg_range=(0,0), title=""):
     """
     Plots the distribution of the normalized activity. Given the average probabilities, standard deviations and the unique values at each
     step of the coarse-graining. This data can be obtained from the RG_class.
@@ -16,6 +16,13 @@ def plot_normalized_activity(p_averages, p_stds, unique_activity_values, cluster
         unique_activity_values - a list of size = n_rg_iterations with each list containing an numpy array of the unique activity values in the clusters
     """
     cluster_sizes = [len(clusters[0]) / len(c) for c in clusters]
+    
+    if rg_range != (0,0):
+        cluster_sizes = cluster_sizes[rg_range[0]:rg_range[1]]
+        p_averages = p_averages[rg_range[0]:rg_range[1]]
+        p_stds = p_stds[rg_range[0]:rg_range[1]]
+        unique_activity_values = unique_activity_values[rg_range[0]:rg_range[1]]
+        clusters = clusters[rg_range[0]:rg_range[1]]
 
     for i, _ in enumerate(p_averages):
         plt.errorbar(unique_activity_values[i], p_averages[i], 2*p_stds[i], fmt="o--", markersize=3, label=f"K = {cluster_sizes[i]}")
@@ -46,7 +53,7 @@ def show_clusters_by_imshow(clusters, verbose=False, title=""):
 
     original_size = len(clusters[0][0]) * len(clusters[0][:, 0])
     grid = np.zeros((original_size, original_size))
-    for c in clusters[:-1]:
+    for c in clusters:
 
         colors = np.arange(1, 1 + len(c[:,0])) / len(c[:,0]) * 10
         for i, color in enumerate(colors):
@@ -60,7 +67,7 @@ def show_clusters_by_imshow(clusters, verbose=False, title=""):
         if verbose == True:
             print(f"Clusters = {c}")
 
-def plot_eigenvalue_scaling(X_coarse, title=""):
+def plot_eigenvalue_scaling(X_coarse, clusters, title=""):
     """
     Plot the eigenvalues spectrum of the correlation function at different steps of the 
     coarse graining.
@@ -68,8 +75,8 @@ def plot_eigenvalue_scaling(X_coarse, title=""):
     Parameters:
         X_coarse - a list of arrays containing the activity of the orignal and coarse-grained variables. 
     """
-    n_vars = X_coarse[0].shape[0]
-    for X in X_coarse:
+    cluster_sizes = [len(c[0]) for c in clusters]
+    for i, X in enumerate(X_coarse):
         # Compute correlation matrix
         corr = np.corrcoef(X)
 
@@ -80,7 +87,7 @@ def plot_eigenvalue_scaling(X_coarse, title=""):
         sort_idx = np.argsort(eigvalues)
         eigvalues = eigvalues[sort_idx][::-1]
         rank = np.arange(0, len(eigvalues)) / len(eigvalues)
-        plt.plot(rank, eigvalues, "o--", label=f"K = {n_vars // X.shape[0]}")
+        plt.plot(rank, eigvalues, "o--", markersize=5, label=f"K = {cluster_sizes[i]}")
     
     plt.ylabel("eigenvalues")
     plt.xlabel("rank/K")
@@ -156,7 +163,54 @@ def plot_eigenvalue_spectra_within_clusters(Xs, clusters, title=""):
         std = np.std(eigvalues_l, axis=0)
         
         # Plot
-        plt.errorbar(rank, mean, 3*std, fmt="o--", label=f"K = {cluster_size}")
+        plt.errorbar(rank, mean, 3*std, fmt="o--", markersize=4, label=f"K = {cluster_size}")
+        
+    plt.xlabel("rank/K")
+    plt.ylabel("eigenvalues")
+    plt.legend()
+    plt.title(title)
+    plt.show()
+    """
+    This function plots the eigenvalue spectra within the clusters. At each coarse-grained level the mean and variance of the spectra
+    across the different clusters are computed and plotted.
+
+    Parameters:
+        Xs - list contianing the dataset at each coarse-grained level
+        clusters - list containing the clusters that where formed at the different coarse-grianing iterations
+    """
+    original_dataset = Xs[0]
+
+    # Loop over coarse-graining iterations
+    for i, cluster in enumerate(clusters):
+
+        # Compute cluster size
+        try:
+            cluster_size = len(cluster[0])
+        except TypeError:
+            continue
+        
+        # Not interested in the spectra of these small clusters
+        if cluster_size <= 2:
+            continue
+            
+        # Compute the spectrum for each cluster, average and plot with std
+        eigvalues_l = []
+        for c in cluster:
+
+            if len(c) != cluster_size:
+                continue
+            
+            corr = np.corrcoef(original_dataset[c])
+            eigvalues, _ = np.linalg.eig(corr)
+            eigvalues_l.append(np.sort(eigvalues)[::-1])
+            
+        # Compute statistics
+        rank = np.arange(1, len(eigvalues) + 1) / len(eigvalues)
+        mean = np.mean(eigvalues_l, axis=0)
+        std = np.std(eigvalues_l, axis=0)
+        
+        # Plot
+        plt.errorbar(rank, mean, 3*std, fmt="o--", markersize=4, label=f"K = {cluster_size}")
         
     plt.xlabel("rank/K")
     plt.ylabel("eigenvalues")
@@ -177,7 +231,8 @@ def plot_free_energy_scaling(p_averages, p_stds, unique_activity_values, cluster
     # Data
     p0_avg = []
     p0_std = []
-    cluster_sizes = [len(clusters[0]) / len(c) for c in clusters]
+    cluster_sizes = [len(c[0]) for c in clusters]
+    popped = 0 # Counter to keep track of how many clusters are never silent
 
     # # 100% and 0% correlation limits
     # idx = np.argwhere(unique_activity_values[0] == 0.0)
@@ -187,7 +242,6 @@ def plot_free_energy_scaling(p_averages, p_stds, unique_activity_values, cluster
     for i, unique_vals in enumerate(unique_activity_values):
         # Find idx at which cluster is silent
         idx = np.argwhere(unique_vals == 0.0)
-        
         # Check it exists
         if len(idx) != 0:
             idx = idx[0]
@@ -195,7 +249,10 @@ def plot_free_energy_scaling(p_averages, p_stds, unique_activity_values, cluster
             # Add to list
             p0_avg.append(list(p_averages[i][idx])[0])
             p0_std.append(list(p_stds[i][idx])[0])
-            
+        else:
+            cluster_sizes.pop(i - popped)
+            popped += 1
+
     # print(limit0)
             
     # # Plot limits
@@ -206,6 +263,7 @@ def plot_free_energy_scaling(p_averages, p_stds, unique_activity_values, cluster
     plt.errorbar(cluster_sizes, p0_avg, 3*np.array(p0_std), fmt="g^--", markersize=5)
     plt.xlabel("cluster size")
     plt.ylabel(r"P$_{Silence}$")
+    plt.ylim(0, max(p0_avg)+0.1)
     #plt.yscale("log")
     plt.grid(True)
     plt.title(title)

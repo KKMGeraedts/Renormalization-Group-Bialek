@@ -100,6 +100,10 @@ class RGObject():
         plt.plot(hist_centers, hist_density, color="g")
         plt.xlabel("correlation coefficient")
         plt.ylabel("density")
+        if min(hist_centers) < 0:
+            plt.xlim(min(hist_centers), 1)
+        else:
+            plt.xlim(0, 1)
         plt.grid(True)
         plt.show()
 
