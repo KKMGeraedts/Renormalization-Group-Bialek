@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 import math
-from scipy.stats import binom
+from scipy.stats import binom, moment
 import matplotlib.colors as mcolors
 
 def plot_normalized_activity(p_averages, p_stds, unique_activity_values, clusters, rg_range=(0,0), title=""):
@@ -270,7 +270,7 @@ def plot_free_energy_scaling(p_averages, p_stds, unique_activity_values, cluster
     # plt.legend()
     plt.show()
 
-def plot_scaling_of_variance(X_coarse, clusters, title=""):
+def plot_scaling_of_moments(X_coarse, clusters, title="", moments=[2], even=True):
     """
     We know that if we add to RV together their variance can be computed by Var(X+Y) = Var(X) + Var(Y) + 2Cov(X, Y). If we can assume Var(x)=Var(Y) then
     adding K uncorrelated RVs we get a scaling of the variance with K^1. On the other hand if the RVs are maximally correlated then one would expect
@@ -285,36 +285,63 @@ def plot_scaling_of_variance(X_coarse, clusters, title=""):
     Return:
         a - scaling found in the coarse-graining procedure
     """
-    # Things to keep track of
-    var_avgs = []
-    var_stds = []
-    cluster_sizes = []
+    print(np.mean(X_coarse[0]))
+    fig, ax = plt.subplots(1, 1)
+    x = []
+    y = []
+    yerr = []
+    for n_th_moment in moments[::-1]:
 
-    # Loop over RGTs
-    for i, X in enumerate(X_coarse):
-        cluster_size = len(clusters[0]) / len(clusters[i])
-        X = X * cluster_size
-        variance = np.var(X, axis=1)
-        var_avgs.append(variance.mean())
-        var_stds.append(variance.std())
-        cluster_sizes.append(cluster_size) 
+        # Things to keep track of
+        moment_avgs = []
+        moment_stds = []
+        cluster_sizes = []
+
+        # Loop over RGTs
+        for i, X in enumerate(X_coarse):
+            cluster_size = len(clusters[0]) / len(clusters[i])
+            X = X * cluster_size # Unnormalize the activity
+
+            # Compute moment
+            n_moment = moment(X, moment=n_th_moment, axis=1) # These are the central moments
+            #print(n_moment.shape, X.shape)
+
+            # Save things
+            moment_avgs.append(n_moment.mean())
+            moment_stds.append(n_moment.std())
+            cluster_sizes.append(cluster_size) 
+
+            if i == 0:
+                y.append(moment_avgs[0])
+                yerr.append(3*np.array(moment_stds[0]))
         
-    # Plot K^1 limit
-    limitK1 = var_avgs[0] * np.array(cluster_sizes)
-    plt.plot(cluster_sizes, limitK1, "r--", alpha=0.5)
+        # Compute log errors for plot
+        moment_stds = moment_stds / np.abs(moment_avgs)
     
-    # Plot K^2 limit
-    limitK2 = var_avgs[0] * np.array(cluster_sizes) ** 2
-    plt.plot(cluster_sizes, limitK2, "r--", alpha=0.5)
-    
-    # Compute log errors for plot
-    var_stds = var_stds / np.abs(var_avgs)
-    
-    # Plot variance along with its error
-    plt.errorbar(cluster_sizes, var_avgs, 3*np.array(var_stds), markersize=5, fmt="g^--")
+        # Plot moments along with error
+        plt.plot(cluster_sizes, moment_avgs, "^", label=f"n = {n_th_moment}")
+        # plt.errorbar(cluster_sizes, moment_avgs, 3*np.array(moment_stds), markersize=5, fmt="^--", label=f"n = {n_th_moment}")
+        
+        # # # Plot K^1 limit (for variance)
+        # limitK1 = moment_avgs[0] * np.array(cluster_sizes)
+        # plt.plot(cluster_sizes, limitK1, "g--", alpha=0.5)
+
+        # # # Plot K^2 limit (for variance)
+        # limitK2 = moment_avgs[0] * np.array(cluster_sizes) ** n_th_moment
+        # plt.plot(cluster_sizes, limitK2, "--", color="gray", alpha=0.5)
+
+    # Make figure look nice
     plt.xlabel("cluster size K")
     plt.ylabel("activity variance")
-    plt.yscale("log")
+
+    if even:
+        plt.yscale("log")
     plt.xscale("log")
     plt.title(title)
+    plt.legend()
+   # plt.grid(True)
     plt.show()   
+
+    plt.scatter(moments[::-1], y)
+    plt.title("Central Moments")
+    plt.plot
