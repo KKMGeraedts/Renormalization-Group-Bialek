@@ -5,44 +5,47 @@ import math
 from scipy.stats import binom, moment
 import matplotlib.colors as mcolors
 
-def plot_normalized_activity(p_averages, p_stds, unique_activity_values, clusters, rg_range=(0,0), title=""):
+def plot_normalized_activity(p_averages, p_confidence_intervals, unique_activity_values, clusters, rg_range=(0,0), title=""):
     """
     Plots the distribution of the normalized activity. Given the average probabilities, standard deviations and the unique values at each
     step of the coarse-graining. This data can be obtained from the RG_class.
 
     Parameters:
         p_averages - a list of size = n_rg_iterations with each list containing an numpy array of the average activity across all clusters
-        p_stds - a list of size = n_rg_iterations with each list containing an numpy array of the standard deviation of the activity across all clusters
+        p_confidence_intervals - a list of size = n_rg_iterations with each item containing a list of upper and lower values for 95% confidence interval
         unique_activity_values - a list of size = n_rg_iterations with each list containing an numpy array of the unique activity values in the clusters
     """
     cluster_sizes = [len(clusters[0]) / len(c) for c in clusters]
+
+    # Create fig, ax
+    fig, ax = plt.subplots(1)
     
     if rg_range != (0,0):
         cluster_sizes = cluster_sizes[rg_range[0]:rg_range[1]]
         p_averages = p_averages[rg_range[0]:rg_range[1]]
-        p_stds = p_stds[rg_range[0]:rg_range[1]]
+        p_confidence_intervals = p_confidence_intervals[rg_range[0]:rg_range[1]]
         unique_activity_values = unique_activity_values[rg_range[0]:rg_range[1]]
         clusters = clusters[rg_range[0]:rg_range[1]]
 
     for i, _ in enumerate(p_averages):
-        plt.errorbar(unique_activity_values[i], p_averages[i], 2*p_stds[i], fmt="o--", markersize=3, label=f"K = {cluster_sizes[i]}")
+        ax.errorbar(unique_activity_values[i], p_averages[i], yerr=np.array(p_confidence_intervals[i].T), fmt="o--", markersize=3, label=f"K = {cluster_sizes[i]}")
 
         # Plot probability distribution of binomial p=0.5 with n=cluster_size
         n = cluster_sizes[i]
         p = 0.5
         x = np.arange(0, n+1)
-        plt.plot(x / cluster_sizes[i], binom.pmf(x, n, p), '--', color="grey", alpha=0.3)
+        ax.plot(x / cluster_sizes[i], binom.pmf(x, n, p), '--', color="grey", alpha=0.3)
         
+    # Make plot nice
+    ax.set_ylabel("probability")
+    ax.set_xlabel("normalized activity")
+    ax.set_title("Probability distribution of the normalized activity")
+    ax.grid(True)
+    ax.legend(loc="upper right")
 
-    plt.ylabel("probability")
-    plt.xlabel("normalized activity")
-    plt.title("Probability distribution of the normalized activity")
-    plt.grid(True)
-    plt.legend(loc="upper right")
-    plt.title(title)
-    plt.show()
+    return fig, ax
 
-def show_clusters_by_imshow(clusters, verbose=False, title=""):
+def show_clusters_by_imshow(clusters, rg_range, OUTPUT_DIR):
     """
     Show the clusters that are formed during the RG procedure.
 
@@ -53,21 +56,23 @@ def show_clusters_by_imshow(clusters, verbose=False, title=""):
 
     original_size = len(clusters[0][0]) * len(clusters[0][:, 0])
     grid = np.zeros((original_size, original_size))
-    for c in clusters:
+    for c in clusters[rg_range[0]:rg_range[1]]:
+
+        # Create fig, ax
+        fig, ax = plt.subplots(1)
 
         colors = np.arange(1, 1 + len(c[:,0])) / len(c[:,0]) * 10
         for i, color in enumerate(colors):
             for j in c[i]:
                 grid[j, c[i]] = color
         
-        plt.imshow(grid)
-        plt.title(title)
-        plt.show()
+        ax.imshow(grid)
+        ax.set_title(f"cluster size = {len(c.T)}")
 
-        if verbose == True:
-            print(f"Clusters = {c}")
+        if OUTPUT_DIR != "":
+            fig.savefig(f"{OUTPUT_DIR}/clusterSize={len(c.T)}")
 
-def plot_eigenvalue_scaling(X_coarse, clusters, title=""):
+def plot_eigenvalue_scaling(X_coarse, clusters):
     """
     Plot the eigenvalues spectrum of the correlation function at different steps of the 
     coarse graining.
@@ -75,6 +80,9 @@ def plot_eigenvalue_scaling(X_coarse, clusters, title=""):
     Parameters:
         X_coarse - a list of arrays containing the activity of the orignal and coarse-grained variables. 
     """
+    # Create fig, ax
+    fig, ax = plt.subplots(1)
+
     cluster_sizes = [len(c[0]) for c in clusters]
     for i, X in enumerate(X_coarse):
         # Compute correlation matrix
@@ -83,17 +91,26 @@ def plot_eigenvalue_scaling(X_coarse, clusters, title=""):
         # Compute its eigenvalues
         eigvalues, eigvectors = np.linalg.eig(corr)
 
+        # Check complex part of eigenvalues
+        delta = 10e-3
+        large_complex_eigvalues = eigvalues.imag[eigvalues.imag > delta]
+        if large_complex_eigvalues != []:
+            print(f"Found some eigenvalues with complex part larger than {delta}. Ignoring them for now. {large_complex_eigvalues}")
+
+        eigvalues = eigvalues.real
+
         # Plot spectrum
         sort_idx = np.argsort(eigvalues)
         eigvalues = eigvalues[sort_idx][::-1]
         rank = np.arange(0, len(eigvalues)) / len(eigvalues)
-        plt.plot(rank, eigvalues, "o--", markersize=5, label=f"K = {cluster_sizes[i]}")
-    
-    plt.ylabel("eigenvalues")
-    plt.xlabel("rank/K")
-    plt.legend()
-    plt.title(title)
-    plt.show()
+        ax.plot(rank, eigvalues, "o--", markersize=5, label=f"K = {cluster_sizes[i]}")
+
+    # Make plot nice
+    ax.set_ylabel("eigenvalues")
+    ax.set_xlabel("rank/K")
+    ax.legend()
+
+    return fig, ax
 
 def plot_n_largest_eigenvectors(X_coarse, n):
     """
@@ -122,7 +139,7 @@ def plot_n_largest_eigenvectors(X_coarse, n):
     plt.legend()
     plt.show()
 
-def plot_eigenvalue_spectra_within_clusters(Xs, clusters, title=""):
+def plot_eigenvalue_spectra_within_clusters(Xs, clusters, rg_range=(0,0)):
     """
     This function plots the eigenvalue spectra within the clusters. At each coarse-grained level the mean and variance of the spectra
     across the different clusters are computed and plotted.
@@ -132,6 +149,13 @@ def plot_eigenvalue_spectra_within_clusters(Xs, clusters, title=""):
         clusters - list containing the clusters that where formed at the different coarse-grianing iterations
     """
     original_dataset = Xs[0]
+
+    if rg_range != (0,0):
+        Xs = Xs[rg_range[0]:rg_range[1]]
+        clusters = clusters[rg_range[0]:rg_range[1]]
+
+    # Create figure and ax
+    fig, ax = plt.subplots(1)
 
     # Loop over coarse-graining iterations
     for i, cluster in enumerate(clusters):
@@ -162,63 +186,20 @@ def plot_eigenvalue_spectra_within_clusters(Xs, clusters, title=""):
         mean = np.mean(eigvalues_l, axis=0)
         std = np.std(eigvalues_l, axis=0)
         
+        # if cluster_size == 32:
+        #     print(np.array(eigvalues_l)[:, 1])
+        #     print(np.mean(np.array(eigvalues_l)[:, 1]))
+
         # Plot
-        plt.errorbar(rank, mean, 3*std, fmt="o--", markersize=4, label=f"K = {cluster_size}")
+        ax.errorbar(rank, mean, 2*std, fmt="o--", markersize=4, label=f"K = {cluster_size}")
         
-    plt.xlabel("rank/K")
-    plt.ylabel("eigenvalues")
-    plt.legend()
-    plt.title(title)
-    plt.show()
-    """
-    This function plots the eigenvalue spectra within the clusters. At each coarse-grained level the mean and variance of the spectra
-    across the different clusters are computed and plotted.
+    ax.set_xlabel("rank/K")
+    ax.set_ylabel("eigenvalues")
+    ax.legend()
 
-    Parameters:
-        Xs - list contianing the dataset at each coarse-grained level
-        clusters - list containing the clusters that where formed at the different coarse-grianing iterations
-    """
-    original_dataset = Xs[0]
+    return fig, ax
 
-    # Loop over coarse-graining iterations
-    for i, cluster in enumerate(clusters):
-
-        # Compute cluster size
-        try:
-            cluster_size = len(cluster[0])
-        except TypeError:
-            continue
-        
-        # Not interested in the spectra of these small clusters
-        if cluster_size <= 2:
-            continue
-            
-        # Compute the spectrum for each cluster, average and plot with std
-        eigvalues_l = []
-        for c in cluster:
-
-            if len(c) != cluster_size:
-                continue
-            
-            corr = np.corrcoef(original_dataset[c])
-            eigvalues, _ = np.linalg.eig(corr)
-            eigvalues_l.append(np.sort(eigvalues)[::-1])
-            
-        # Compute statistics
-        rank = np.arange(1, len(eigvalues) + 1) / len(eigvalues)
-        mean = np.mean(eigvalues_l, axis=0)
-        std = np.std(eigvalues_l, axis=0)
-        
-        # Plot
-        plt.errorbar(rank, mean, 3*std, fmt="o--", markersize=4, label=f"K = {cluster_size}")
-        
-    plt.xlabel("rank/K")
-    plt.ylabel("eigenvalues")
-    plt.legend()
-    plt.title(title)
-    plt.show()
-
-def plot_free_energy_scaling(p_averages, p_stds, unique_activity_values, clusters, title=""):
+def plot_free_energy_scaling(p_averages, p_confidence_intervals, unique_activity_values, clusters):
     """
     When a RG transformation is exact the free energy does not change. This function compute the free energy at each
     coarse-grained step and log plots the values. We hope to see some scaling with a power law close to 1.
@@ -230,7 +211,7 @@ def plot_free_energy_scaling(p_averages, p_stds, unique_activity_values, cluster
     """
     # Data
     p0_avg = []
-    p0_std = []
+    p0_confidence_intervals = []
     cluster_sizes = [len(c[0]) for c in clusters]
     popped = 0 # Counter to keep track of how many clusters are never silent
 
@@ -238,6 +219,9 @@ def plot_free_energy_scaling(p_averages, p_stds, unique_activity_values, cluster
     # idx = np.argwhere(unique_activity_values[0] == 0.0)
     # limit100 = list(list(p_averages[0][idx])[0]) * len(unique_activity_values)
     # limit0 = (limit100) ** np.arange(1, len(unique_activity_values)+1)
+
+    # Create fig, ax
+    fig, ax = plt.subplots(1)
 
     for i, unique_vals in enumerate(unique_activity_values):
         # Find idx at which cluster is silent
@@ -248,7 +232,7 @@ def plot_free_energy_scaling(p_averages, p_stds, unique_activity_values, cluster
             
             # Add to list
             p0_avg.append(list(p_averages[i][idx])[0])
-            p0_std.append(list(p_stds[i][idx])[0])
+            p0_confidence_intervals.append([p_confidence_intervals[i][idx][0][0], p_confidence_intervals[i][idx][0][1]])
         else:
             cluster_sizes.pop(i - popped)
             popped += 1
@@ -259,18 +243,17 @@ def plot_free_energy_scaling(p_averages, p_stds, unique_activity_values, cluster
     # plt.plot(cluster_sizes, limit0, "--", alpha=0.5, label="0% correlation")
     # plt.plot(cluster_sizes, limit100, "--", alpha=0.5, label="100% correlation")
 
-    # Plot the probability of the cluster being silent
-    plt.errorbar(cluster_sizes, p0_avg, 3*np.array(p0_std), fmt="g^--", markersize=5)
-    plt.xlabel("cluster size")
-    plt.ylabel(r"P$_{Silence}$")
-    plt.ylim(0, max(p0_avg)+0.1)
+    # Plot the probability of the cluster being silent  
+    ax.errorbar(cluster_sizes, p0_avg, yerr=np.transpose(p0_confidence_intervals), fmt="g^--", markersize=5)
+    ax.set_xlabel("cluster size")
+    ax.set_ylabel(r"P$_{Silence}$")
+    ax.set_ylim(0, max(p0_avg)+0.1)
     #plt.yscale("log")
-    plt.grid(True)
-    plt.title(title)
-    # plt.legend()
-    plt.show()
+    ax.grid(True)
 
-def plot_scaling_of_moments(X_coarse, clusters, title="", moments=[2], even=True):
+    return fig, ax
+
+def plot_scaling_of_moments(X_coarse, clusters, moments=[2], limits=True):
     """
     We know that if we add to RV together their variance can be computed by Var(X+Y) = Var(X) + Var(Y) + 2Cov(X, Y). If we can assume Var(x)=Var(Y) then
     adding K uncorrelated RVs we get a scaling of the variance with K^1. On the other hand if the RVs are maximally correlated then one would expect
@@ -285,8 +268,7 @@ def plot_scaling_of_moments(X_coarse, clusters, title="", moments=[2], even=True
     Return:
         a - scaling found in the coarse-graining procedure
     """
-    print(np.mean(X_coarse[0]))
-    fig, ax = plt.subplots(1, 1)
+    fig, ax = plt.subplots(1)
     x = []
     y = []
     yerr = []
@@ -316,32 +298,31 @@ def plot_scaling_of_moments(X_coarse, clusters, title="", moments=[2], even=True
                 yerr.append(3*np.array(moment_stds[0]))
         
         # Compute log errors for plot
-        moment_stds = moment_stds / np.abs(moment_avgs)
-    
+        with np.errstate(invalid='ignore'):
+            moment_stds = moment_stds / np.abs(moment_avgs)
+
         # Plot moments along with error
-        plt.plot(cluster_sizes, moment_avgs, "^", label=f"n = {n_th_moment}")
+        ax.plot(cluster_sizes, moment_avgs, "^", label=f"n = {n_th_moment}")
         # plt.errorbar(cluster_sizes, moment_avgs, 3*np.array(moment_stds), markersize=5, fmt="^--", label=f"n = {n_th_moment}")
         
-        # # # Plot K^1 limit (for variance)
-        # limitK1 = moment_avgs[0] * np.array(cluster_sizes)
-        # plt.plot(cluster_sizes, limitK1, "g--", alpha=0.5)
+        if limits == True:
+            # # Plot K^1 limit (for variance)
+            limitK1 = moment_avgs[0] * np.array(cluster_sizes)
+            ax.plot(cluster_sizes, limitK1, "g--", alpha=0.5)
 
-        # # # Plot K^2 limit (for variance)
-        # limitK2 = moment_avgs[0] * np.array(cluster_sizes) ** n_th_moment
-        # plt.plot(cluster_sizes, limitK2, "--", color="gray", alpha=0.5)
+            # # Plot K^2 limit (for variance)
+            limitK2 = moment_avgs[0] * np.array(cluster_sizes) ** n_th_moment
+            ax.plot(cluster_sizes, limitK2, "--", color="gray", alpha=0.5)
 
     # Make figure look nice
-    plt.xlabel("cluster size K")
-    plt.ylabel("activity variance")
+    ax.set_xlabel("cluster size K")
+    ax.set_ylabel("activity variance")
+    ax.set_yscale("log")
+    ax.set_xscale("log")
+    ax.legend()
 
-    if even:
-        plt.yscale("log")
-    plt.xscale("log")
-    plt.title(title)
-    plt.legend()
-   # plt.grid(True)
-    plt.show()   
+    # plt.scatter(moments[::-1], y)
+    # plt.title("Central Moments")
+    # plt.plot
 
-    plt.scatter(moments[::-1], y)
-    plt.title("Central Moments")
-    plt.plot
+    return fig, ax

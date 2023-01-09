@@ -15,7 +15,7 @@ class RGObject():
         self.clusters = []
         self.couplings = []
 
-    def load_dataset(self, input_file):
+    def load_dataset(self, input_file, method="file"):
         """
         Load the dataset stored in location given by 'input_file'. The Dataset is then
         stored as an attribute of the class in its self.X attribute.
@@ -24,8 +24,14 @@ class RGObject():
             input_file - a string containing the relative directory of the input file
 
         """
-        self.X = read_input(input_file)
-        self.X = check_dataset(self.X.T)
+        if method == "file":
+            self.X = read_input(input_file)
+            self.X = check_dataset(self.X.T)
+        elif method == "data":
+            self.X = input_file
+            self.X = check_dataset(self.X.T)
+        else: 
+            print("Invalid method.")
 
     def perform_real_space_coarse_graining(self, method, rg_iterations=5):
         """
@@ -96,33 +102,68 @@ class RGObject():
         total_count = sum(hist_counts)
         hist_density = [hist_counts[i] / total_count for i in range(len(hist_counts))]
 
+        # Create fig, ax
+        fig, ax = plt.subplots(1)
+
         # Plot histogram 
-        plt.plot(hist_centers, hist_density, color="g")
-        plt.xlabel("correlation coefficient")
-        plt.ylabel("density")
+        ax.plot(hist_centers, hist_density, color="g")
+        ax.set_xlabel("correlation coefficient")
+        ax.set_ylabel("density")
         if min(hist_centers) < 0:
-            plt.xlim(min(hist_centers), 1)
+            ax.set_xlim(min(hist_centers), 1)
         else:
-            plt.xlim(0, 1)
-        plt.grid(True)
-        plt.show()
+            ax.set_xlim(0, 1)
+        ax.grid(True)
 
         # Return hist_centers and hist_value if specified
         if return_hist == True:
-            return hist_centers, hist_density
+            return hist_centers, hist_density, fig, ax
+        else:
+            return fig, ax
 
-    def compute_probability_distributions(self, verbose=False):
+    def _bootstrap(self, probs, N):
         """
-        Computes the probability distributions at each intermediate step of the coarse-graining.
+        """
+        values = []
+        probs = probs.T
+        for x in probs:
+            values = [np.random.choice(probs[:, 0], size=len(probs[:, 0]), replace=True).mean() for i in range(N)]
+
+    def _compute_confidence_intervals(self, df_probs, confidence=95, N=1000):
+        """
+        Compute confidence intervals using bootstrap
+
+        Parameters: 
+            df_probs - Dataframe containing probability of activity for each variable
+
+        Return:
+            - Confidence intervals as a 2d array.
+        """
+        probs = df_probs.to_numpy().T
+        percentile = (100 - confidence) / 2
+
+        # Perform a bootstrap
+        confidence_intervals = np.empty(shape=(len(probs), 2))
+        for i, x in enumerate(probs):
+            values = [np.random.choice(x, size=len(x), replace=True).mean() for i in range(N)]
+            confidence_intervals[i] = np.percentile(values, [percentile, 100-percentile])
+
+        return confidence_intervals
+
+    def compute_activity_distributions(self, verbose=False):
+        """
+        Computes the activity distributions at each intermediate step of the coarse-graining.
 
         # POTENTIAL UPGRADE: use scipy.stats.rv_continious or something similar to compute the pdf
 
         Parameters:
             verbose (optional) - if set to True prints the timing at each RG step
 
+        # NOTE: All these below values are computed across the rg steps. Their shapes are (n_rg_iterations, ..). Where the shape in the dots is described below. 
         Return:
-        probabilities_clusters - contains the probabilities in the following way, ndarray of shape (n_unique_activity_values, n_variables, n_rg_iterations) 
-        activity_clusters - contains all the unique activity values, ndarray of shape (n_unique_actitiviy_values, n_rg_iterations)
+            p_averages - Average probability of certain activity value (across all variables). Shape(..) = unique_activity_values
+            p_confidence_intervals - Confidence interval around the average probability. Shape(..) = (unique_activity_values, unique_activity_values)
+            unique_activity_values - Unique activity values. Shape(..) = (unique_activity_values)
         """
         # Check that some coarse-grianing has happened
         if self.Xs == []:
@@ -133,6 +174,7 @@ class RGObject():
         t_start_all = time.time()
         p_averages = []
         p_stds = []
+        p_confidence_intervals = []
         unique_activity_values = []
         #df_probability_distributions = pd.DataFrame()
 
@@ -158,14 +200,16 @@ class RGObject():
                 counts = counts / sum(counts)
                 
                 # Add to dataframe
-                df_probs = df_probs.append(dict(zip(values, counts)), ignore_index=True)
-                
+                new_df = pd.DataFrame.from_dict(dict(zip(values, counts)), orient="index").T
+                df_probs = pd.concat([df_probs, new_df], ignore_index=True)
+
             # Fill nan values and sort
             df_probs = df_probs.fillna(0.00)
             df_probs = df_probs.reindex(sorted(df_probs.columns), axis=1)
                     
             # Compute column averages and stds
             p_averages.append(df_probs.mean(axis=0).to_numpy())
+            p_confidence_intervals.append(self._compute_confidence_intervals(df_probs))
             p_stds.append(df_probs.std(axis=0).to_numpy())
 
             # Add unique values
@@ -178,4 +222,4 @@ class RGObject():
                 print(f"Running time = {round(time.time() - t_start, 3)} seconds.")
 
         print(f"Total running time = {round(time.time() - t_start_all, 3)} seconds.")
-        return p_averages, p_stds, unique_activity_values
+        return p_averages, p_confidence_intervals, unique_activity_values
