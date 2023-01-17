@@ -59,7 +59,7 @@ def create_and_save_a_series_of_plots(Xs, clusters, p_averages, p_confidence_int
 
     # Plot scaling of variance
     moments = [2]
-    fig, ax = plot_scaling_of_moments(Xs, clusters, moments=moments, limits=False)
+    fig, ax = plot_scaling_of_moments(Xs, clusters, moments=moments, limits=True)
     fig.savefig(f"{OUTPUT_DIR}/scaling_of_variance")
 
     # Plot scaling of a few even moments
@@ -88,7 +88,8 @@ def create_and_save_a_series_of_plots(Xs, clusters, p_averages, p_confidence_int
     fig.savefig(f"{OUTPUT_DIR}/normalized_activity")
  
     # Plot eigenvalue spectra between clusters
-    fig, ax = plot_eigenvalue_scaling(Xs, clusters)
+    rg_range = (0, len(clusters) - 2)
+    fig, ax = plot_eigenvalue_scaling(Xs, clusters, rg_range)
     fig.savefig(f"{OUTPUT_DIR}/eigenvalue_spectra_between_clusters")
 
     # Show the clusters at different steps by imshow
@@ -96,6 +97,22 @@ def create_and_save_a_series_of_plots(Xs, clusters, p_averages, p_confidence_int
     show_clusters_by_imshow(clusters, rg_range, OUTPUT_DIR)
 
     print(f"Created a bunch of plots. They can be found in {OUTPUT_DIR}.")
+
+def create_output_dir(input_file):
+    """
+    Create the output directory. Results are stored in a directory with folder name same as
+    input file name.
+    """
+    # Folder path
+    out_dir_suffix = input_file.split(".")[0][6:] # Ignore 'input/' 
+    
+    # Create final folder
+    global OUTPUT_DIR
+    OUTPUT_DIR = f"figures/{out_dir_suffix}"
+    try: 
+        os.makedirs(OUTPUT_DIR)
+    except FileExistsError:
+        pass
 
 if __name__ == "__main__":
 
@@ -109,13 +126,8 @@ if __name__ == "__main__":
     # Read data
     X = read_input(input_file)
 
-    # Create the output directory if it does not exist yet
-    out_dir_suffix = input_file.split(".")[0][6:] # Ignore 'input/' 
-    OUTPUT_DIR = f"figures/{out_dir_suffix}"
-    try: 
-        os.mkdir(OUTPUT_DIR)
-    except FileExistsError:
-        pass
+    # Create the output directory
+    create_output_dir(input_file)
 
     # N iterations
     if len(sys.argv) > 2:

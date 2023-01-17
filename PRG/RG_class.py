@@ -221,5 +221,5 @@ class RGObject():
                 print(f"Finished {i+1}/{len(self.Xs)}")
                 print(f"Running time = {round(time.time() - t_start, 3)} seconds.")
 
-        print(f"Total running time = {round(time.time() - t_start_all, 3)} seconds.")
+        print(f"Running time for activity distributions = {round(time.time() - t_start_all, 3)} seconds.")
         return p_averages, p_confidence_intervals, unique_activity_values

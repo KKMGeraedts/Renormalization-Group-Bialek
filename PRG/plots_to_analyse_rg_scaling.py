@@ -28,7 +28,8 @@ def plot_normalized_activity(p_averages, p_confidence_intervals, unique_activity
         clusters = clusters[rg_range[0]:rg_range[1]]
 
     for i, _ in enumerate(p_averages):
-        ax.errorbar(unique_activity_values[i], p_averages[i], yerr=np.array(p_confidence_intervals[i].T), fmt="o--", markersize=3, label=f"K = {cluster_sizes[i]}")
+        p_confidence_interval = np.abs(p_confidence_intervals[i].T - p_averages[i])
+        ax.errorbar(unique_activity_values[i], p_averages[i], yerr=np.array(p_confidence_interval), fmt="o--", markersize=3, label=f"K = {cluster_sizes[i]}")
 
         # Plot probability distribution of binomial p=0.5 with n=cluster_size
         n = cluster_sizes[i]
@@ -72,7 +73,7 @@ def show_clusters_by_imshow(clusters, rg_range, OUTPUT_DIR):
         if OUTPUT_DIR != "":
             fig.savefig(f"{OUTPUT_DIR}/clusterSize={len(c.T)}")
 
-def plot_eigenvalue_scaling(X_coarse, clusters):
+def plot_eigenvalue_scaling(X_coarse, clusters, rg_range=(0,0)):
     """
     Plot the eigenvalues spectrum of the correlation function at different steps of the 
     coarse graining.
@@ -82,6 +83,10 @@ def plot_eigenvalue_scaling(X_coarse, clusters):
     """
     # Create fig, ax
     fig, ax = plt.subplots(1)
+
+    if rg_range != (0,0):
+        X_coarse = X_coarse[rg_range[0]:rg_range[1]]
+        clusters = clusters[rg_range[0]:rg_range[1]]
 
     cluster_sizes = [len(c[0]) for c in clusters]
     for i, X in enumerate(X_coarse):
@@ -108,6 +113,7 @@ def plot_eigenvalue_scaling(X_coarse, clusters):
     # Make plot nice
     ax.set_ylabel("eigenvalues")
     ax.set_xlabel("rank/K")
+    ax.set_yscale("log")
     ax.legend()
 
     return fig, ax
@@ -170,7 +176,7 @@ def plot_eigenvalue_spectra_within_clusters(Xs, clusters, rg_range=(0,0)):
         if cluster_size <= 2:
             continue
             
-        # Compute the spectrum for each cluster, average and plot with std
+        # Compute the spectrum for each cluster, average and plot with confidence interval
         eigvalues_l = []
         for c in cluster:
 
@@ -180,21 +186,33 @@ def plot_eigenvalue_spectra_within_clusters(Xs, clusters, rg_range=(0,0)):
             corr = np.corrcoef(original_dataset[c])
             eigvalues, _ = np.linalg.eig(corr)
             eigvalues_l.append(np.sort(eigvalues)[::-1])
-            
+         
         # Compute statistics
         rank = np.arange(1, len(eigvalues) + 1) / len(eigvalues)
         mean = np.mean(eigvalues_l, axis=0)
         std = np.std(eigvalues_l, axis=0)
-        
+
+        # Bootstrap params
+        N = 1000
+        percentile = 2.5 # =(100-confidence)/2 
+        confidence_intervals = np.empty(shape=(len(eigvalues_l[0]), 2))
+
+        # Perform bootstrap for the confidence interval
+        for j, eigvs in enumerate(np.transpose(eigvalues_l)):
+            bootstrap_values = [np.random.choice(eigvs, size=len(eigvs), replace=True).mean() for i in range(N)]
+            confidence_intervals[j] = np.percentile(bootstrap_values, [percentile, 100-percentile])
+            confidence_intervals[j] = np.abs(confidence_intervals[j] - mean[j])
+    
         # if cluster_size == 32:
         #     print(np.array(eigvalues_l)[:, 1])
         #     print(np.mean(np.array(eigvalues_l)[:, 1]))
 
         # Plot
-        ax.errorbar(rank, mean, 2*std, fmt="o--", markersize=4, label=f"K = {cluster_size}")
-        
+        ax.errorbar(rank, mean, yerr=confidence_intervals.T, fmt="o--", markersize=4, label=f"K = {cluster_size}")
+
     ax.set_xlabel("rank/K")
     ax.set_ylabel("eigenvalues")
+    ax.set_yscale("log")
     ax.legend()
 
     return fig, ax
@@ -243,8 +261,9 @@ def plot_free_energy_scaling(p_averages, p_confidence_intervals, unique_activity
     # plt.plot(cluster_sizes, limit0, "--", alpha=0.5, label="0% correlation")
     # plt.plot(cluster_sizes, limit100, "--", alpha=0.5, label="100% correlation")
 
-    # Plot the probability of the cluster being silent  
-    ax.errorbar(cluster_sizes, p0_avg, yerr=np.transpose(p0_confidence_intervals), fmt="g^--", markersize=5)
+    # Plot the probability of the cluster being silent
+    p0_confidence_intervals = np.abs(np.transpose(p0_confidence_intervals) - p0_avg)  
+    ax.errorbar(cluster_sizes, p0_avg, yerr=p0_confidence_intervals, fmt="g^--", markersize=5)
     ax.set_xlabel("cluster size")
     ax.set_ylabel(r"P$_{Silence}$")
     ax.set_ylim(0, max(p0_avg)+0.1)
@@ -276,50 +295,60 @@ def plot_scaling_of_moments(X_coarse, clusters, moments=[2], limits=True):
 
         # Things to keep track of
         moment_avgs = []
-        moment_stds = []
+        confidence_intervals = np.empty(shape=(len(X_coarse), 2))
         cluster_sizes = []
 
         # Loop over RGTs
         for i, X in enumerate(X_coarse):
+
+            # Compute cluster size and save
             cluster_size = len(clusters[0]) / len(clusters[i])
+            cluster_sizes.append(cluster_size)
+
             X = X * cluster_size # Unnormalize the activity
 
             # Compute moment
             n_moment = moment(X, moment=n_th_moment, axis=1) # These are the central moments
-            #print(n_moment.shape, X.shape)
 
-            # Save things
+            # Compute mean
             moment_avgs.append(n_moment.mean())
-            moment_stds.append(n_moment.std())
-            cluster_sizes.append(cluster_size) 
 
-            if i == 0:
-                y.append(moment_avgs[0])
-                yerr.append(3*np.array(moment_stds[0]))
+            # Compute confidence interval by bootstrap
+            N = 1000
+            percentile = 2.5 
+            bootstrap_values = [np.random.choice(n_moment, size=(len(n_moment))).mean() for _ in range(N)]
+            confidence_interval = [np.percentile(bootstrap_values, percentile), np.percentile(bootstrap_values, 100-percentile)]
+            confidence_intervals[i] = np.abs(moment_avgs[i] - confidence_interval)
+
+            # if i == 0:
+            #     y.append(moment_avgs[0])
+            #     yerr.append(3*np.array(moment_stds[0]))
         
-        # Compute log errors for plot
-        with np.errstate(invalid='ignore'):
-            moment_stds = moment_stds / np.abs(moment_avgs)
+        # # Compute log errors for plot
+        # with np.errstate(invalid='ignore'):
+        #     moment_stds = moment_stds / np.abs(moment_avgs)
 
         # Plot moments along with error
-        ax.plot(cluster_sizes, moment_avgs, "^", label=f"n = {n_th_moment}")
-        # plt.errorbar(cluster_sizes, moment_avgs, 3*np.array(moment_stds), markersize=5, fmt="^--", label=f"n = {n_th_moment}")
+        #ax.plot(cluster_sizes, moment_avgs, "^", label=f"n = {n_th_moment}")
+        ax.errorbar(cluster_sizes, moment_avgs, confidence_intervals.T, markersize=5, fmt="^--", label=f"n = {n_th_moment}")
         
         if limits == True:
             # # Plot K^1 limit (for variance)
             limitK1 = moment_avgs[0] * np.array(cluster_sizes)
-            ax.plot(cluster_sizes, limitK1, "g--", alpha=0.5)
+            ax.plot(cluster_sizes, limitK1, "r--", alpha=0.5)
 
             # # Plot K^2 limit (for variance)
             limitK2 = moment_avgs[0] * np.array(cluster_sizes) ** n_th_moment
-            ax.plot(cluster_sizes, limitK2, "--", color="gray", alpha=0.5)
+            ax.plot(cluster_sizes, limitK2, "r--", alpha=0.5)
 
     # Make figure look nice
     ax.set_xlabel("cluster size K")
     ax.set_ylabel("activity variance")
     ax.set_yscale("log")
     ax.set_xscale("log")
-    ax.legend()
+
+    if len(moments) > 1:
+        ax.legend()
 
     # plt.scatter(moments[::-1], y)
     # plt.title("Central Moments")
