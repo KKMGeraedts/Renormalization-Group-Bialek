@@ -42,7 +42,7 @@ def check_dataset_shape(X):
     Computation of the correlation matrix assumes the shape = (n_features, n_datapoints). 
     Perform a simple check and ask user if they want to transpose the data.
     """
-    X = X.T #NOTE: Remove this line
+    X = X #NOTE: Remove this line
     if len(X[:, 0]) > len(X[0]):
         response = input(f"Dataset has shape = {X.shape}. There are more features than data points! Do you want to transpose the data? ")
         if response in ["yes", "y", "YES", "ye", "yh", "Yes"]:

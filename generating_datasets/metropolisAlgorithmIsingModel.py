@@ -95,7 +95,7 @@ def compute_energy(lattice, J):
 if __name__ == "__main__":
     # Initial values
     L = 16
-    T = 10
+    T = 3
     J = 1
     N_thermal = 1_000
     N_mc = 2**14
